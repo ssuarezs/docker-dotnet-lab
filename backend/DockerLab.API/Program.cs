@@ -32,7 +32,7 @@ app.UseCors("AllowAllOrigins");
 app.UseAuthorization();
 
 // Health check endpoint
-app.MapGet("/health", () => new { 
+app.MapGet("/", () => new { 
     Status = "Healthy", 
     Timestamp = DateTime.UtcNow,
     Environment = app.Environment.EnvironmentName 

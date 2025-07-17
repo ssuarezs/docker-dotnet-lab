@@ -1,0 +1,81 @@
+# .github/workflows/deploy.yml
+
+name: Construir y Desplegar en Azure
+
+# Disparador: se ejecuta cada vez que hay un push a la rama 'main'
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions
+
+jobs:
+  # --- TRABAJO PARA EL BACKEND (.NET API) ---
+  build-and-deploy-api:
+    runs-on: ubuntu-latest # Usamos un corredor de Linux
+    steps:
+      # 1. Clona el repositorio para tener el código
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      # 2. Inicia sesión en Docker Hub usando los secretos
+      - name: Login en Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Construye y publica la imagen de la API
+      - name: Construir y Publicar API
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/DockerLab.API # Ruta al Dockerfile de la API
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/docker-lab-api:latest # Nombra la imagen
+
+      # 4. Inicia sesión en Azure usando el secreto JSON
+      - name: Login en Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 5. Despliega en Azure App Service, forzando un reinicio
+      - name: Desplegar API en Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'docker-lab-api' # ? ⚠️ App Service Name ?
+          images: '${{ secrets.DOCKERHUB_USERNAME }}/docker-lab-api:latest'
+
+  # --- TRABAJO PARA EL FRONTEND (SVELTE) ---
+  build-and-deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: build-and-deploy-api # Opcional: espera a que la API termine
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Construye y publica la imagen del Frontend
+      - name: Construir y Publicar Frontend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend # Ruta al Dockerfile del Frontend
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/docker-lab-frontend:latest
+
+      - name: Login en Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 5. Despliega el Frontend, pasando la variable de entorno
+      - name: Desplegar Frontend en Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'docker-front' # ? ⚠️ App Service Name ?
+          images: '${{ secrets.DOCKERHUB_USERNAME }}/docker-lab-frontend:latest'
+          # No es necesario configurar la variable aquí, ya que debe estar en la config del App Service
